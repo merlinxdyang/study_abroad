@@ -1,7 +1,7 @@
 interface:
   display_name: "Study Abroad Application Manager"
-  short_description: "Manage study abroad applications"
-  default_prompt: "Use $study-abroad-application-manager to analyze these programs against my profile, then produce requirement summaries, match reports, draft letters, and deadline checklists."
+  short_description: "Match programs and draft application materials"
+  default_prompt: "Use $study-abroad-application-manager to extract my applicant profile from one resume, compare it against these programs, then generate the required writing drafts, recommendation materials, and deadline checklist."
 
 policy:
   allow_implicit_invocation: true

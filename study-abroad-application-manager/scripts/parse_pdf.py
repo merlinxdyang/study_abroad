@@ -29,10 +29,14 @@ DOC_KEYWORDS = [
     "resume",
     "personal statement",
     "statement of purpose",
+    "motivation letter",
+    "letter of motivation",
     "sop",
     "cover letter",
+    "essay",
     "recommendation",
     "reference letter",
+    "letter of reference",
     "passport",
     "language score",
     "toefl",
@@ -184,13 +188,20 @@ def extract_hard_requirements(text: str) -> dict[str, Any]:
     gmat = first_match(r"(?i)\bGMAT\b[^\n]{0,60}?(\d{3,4})", text)
     if gmat:
         req["gmat"] = gmat
-    rec = first_match(r"(?i)(\d+|one|two|three)\s+(?:letters?\s+of\s+)?recommendation", text)
+    rec = first_match(
+        r"(?i)(\d+|one|two|three)\s+(?:(?:letters?\s+of\s+)?recommendation|reference letters?|letters?\s+of\s+reference)",
+        text,
+    )
     if rec:
         req["recommendation_letters"] = rec
     prereq_snippets = find_snippets(text, [r"prerequisite", r"prior coursework", r"background in"], window=280)
     if prereq_snippets:
         req["prerequisites"] = prereq_snippets[:3]
-    essay_snippets = find_snippets(text, [r"statement of purpose", r"personal statement", r"essay", r"cover letter"], window=280)
+    essay_snippets = find_snippets(
+        text,
+        [r"statement of purpose", r"personal statement", r"motivation letter", r"letter of motivation", r"essay", r"cover letter"],
+        window=280,
+    )
     if essay_snippets:
         req["writing_requirements"] = essay_snippets[:3]
     return req

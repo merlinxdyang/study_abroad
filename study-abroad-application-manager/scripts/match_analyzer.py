@@ -169,6 +169,15 @@ RECOMMENDATION_LABELS = {
 }
 
 
+NUMBER_WORDS = {
+    "one": 1.0,
+    "two": 2.0,
+    "three": 3.0,
+    "four": 4.0,
+    "five": 5.0,
+}
+
+
 def load_programs(path: Path) -> list[dict[str, Any]]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(data, dict) and "programs" in data:
@@ -282,7 +291,56 @@ def parse_profile(text: str, requested_language: str) -> dict[str, Any]:
         "language_detection": requested_language,
         "text": text,
         "lower": text.lower(),
+        "applicant": {},
+        "evidence": {},
+        "writing_bank": [],
+        "source_file": "",
     }
+
+
+def score_value(score: Any) -> float | None:
+    if isinstance(score, dict):
+        value = score.get("value")
+        return float(value) if isinstance(value, (int, float)) else None
+    if isinstance(score, (int, float)):
+        return float(score)
+    return None
+
+
+def load_profile(path: Path, requested_language: str) -> dict[str, Any]:
+    if path.suffix.lower() == ".json":
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            data = None
+        if isinstance(data, dict) and "scores" in data and "evidence" in data:
+            raw_text = str(data.get("raw_text") or "")
+            evidence_text = "\n".join(
+                item.get("text", "")
+                for items in (data.get("evidence") or {}).values()
+                for item in items
+                if isinstance(item, dict)
+            )
+            text = raw_text or evidence_text
+            language = str(data.get("language") or detect_profile_language(text))
+            scores = data.get("scores") or {}
+            return {
+                "gpa": score_value(scores.get("gpa")),
+                "toefl": score_value(scores.get("toefl")),
+                "ielts": score_value(scores.get("ielts")),
+                "gre": score_value(scores.get("gre")),
+                "gmat": score_value(scores.get("gmat")),
+                "language": language,
+                "language_name": data.get("language_name") or language_name(language),
+                "language_detection": "applicant_profile_json",
+                "text": text,
+                "lower": text.lower(),
+                "applicant": data.get("applicant") or {},
+                "evidence": data.get("evidence") or {},
+                "writing_bank": data.get("writing_bank") or [],
+                "source_file": data.get("source_file") or str(path),
+            }
+    return parse_profile(read_profile(path), requested_language)
 
 
 def parse_threshold(value: Any) -> float | None:
@@ -290,7 +348,10 @@ def parse_threshold(value: Any) -> float | None:
         return None
     text = " ".join(str(v) for v in value) if isinstance(value, list) else str(value)
     match = re.search(r"(\d+(?:\.\d+)?)", text)
-    return float(match.group(1)) if match else None
+    if match:
+        return float(match.group(1))
+    word_match = re.search(r"\b(one|two|three|four|five)\b", text, re.I)
+    return NUMBER_WORDS.get(word_match.group(1).lower()) if word_match else None
 
 
 def check_numeric(
@@ -327,6 +388,62 @@ def soft_fit(profile: dict[str, Any], program: dict[str, Any]) -> tuple[float, l
     return score, hits
 
 
+def select_writing_evidence(profile: dict[str, Any], soft_hits: list[str]) -> list[dict[str, Any]]:
+    bank = list(profile.get("writing_bank") or [])
+    if not bank:
+        return []
+    priority = {
+        "research": ["research_fit", "academic_readiness"],
+        "project": ["research_fit", "practical_experience"],
+        "internship": ["practical_experience"],
+        "leadership": ["leadership_and_initiative"],
+        "quant": ["academic_readiness", "technical_or_language_skills"],
+        "cs": ["technical_or_language_skills", "research_fit"],
+    }
+    wanted: list[str] = []
+    for hit in soft_hits:
+        wanted.extend(priority.get(hit, []))
+    wanted.extend(["academic_readiness", "goals", "practical_experience"])
+    ordered: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for theme in wanted:
+        for item in bank:
+            if item.get("theme") == theme and theme not in seen:
+                ordered.append(item)
+                seen.add(theme)
+    for item in bank:
+        theme = str(item.get("theme") or "")
+        if theme and theme not in seen:
+            ordered.append(item)
+            seen.add(theme)
+    return ordered[:4]
+
+
+def program_fit_features(program: dict[str, Any]) -> list[str]:
+    features: list[str] = []
+    for key in ("program_name", "school_name"):
+        value = str(program.get(key) or "").strip()
+        if value:
+            features.append(value)
+    hard = program.get("hard_requirements") or {}
+    for key in ("prerequisites", "writing_requirements"):
+        value = hard.get(key)
+        if isinstance(value, list):
+            features.extend(str(item) for item in value[:3])
+        elif value:
+            features.append(str(value))
+    for item in program.get("required_documents") or []:
+        features.append(str(item))
+    seen: set[str] = set()
+    compact: list[str] = []
+    for feature in features:
+        normalized = re.sub(r"\s+", " ", feature).strip()
+        if normalized and normalized not in seen:
+            compact.append(normalized)
+            seen.add(normalized)
+    return compact[:8]
+
+
 def analyze(program: dict[str, Any], profile: dict[str, Any], report_language: str) -> dict[str, Any]:
     reqs = program.get("hard_requirements") or {}
     checks: list[tuple[bool | None, str]] = [
@@ -351,6 +468,24 @@ def analyze(program: dict[str, Any], profile: dict[str, Any], report_language: s
     else:
         recommendation = "high risk"
     recommendation_label = RECOMMENDATION_LABELS.get(report_language, RECOMMENDATION_LABELS["en"])[recommendation]
+    if unmet:
+        writing_strategy = (
+            "Address hard-requirement risks directly and do not imply eligibility is confirmed."
+            if report_language != "zh"
+            else "文书中需要正面处理硬性条件风险，不能暗示资格已确认。"
+        )
+    elif score >= 75:
+        writing_strategy = (
+            "Lead with the strongest fit evidence and connect it to verified program requirements."
+            if report_language != "zh"
+            else "文书应优先呈现最强匹配证据，并连接到已核实的项目要求。"
+        )
+    else:
+        writing_strategy = (
+            "Use a cautious draft that explains motivation, transferable preparation, and gaps to verify."
+            if report_language != "zh"
+            else "文书应采用谨慎写法，说明动机、可迁移准备和需要核对的短板。"
+        )
     return {
         "program_name": program.get("program_name", ""),
         "school_name": program.get("school_name", ""),
@@ -361,6 +496,9 @@ def analyze(program: dict[str, Any], profile: dict[str, Any], report_language: s
         "soft_fit_score": round(soft_score, 3),
         "checks": [detail for _, detail in checks],
         "soft_fit_hits": soft_hits,
+        "writing_evidence": select_writing_evidence(profile, soft_hits),
+        "program_features_for_drafting": program_fit_features(program),
+        "writing_strategy": writing_strategy,
         "unmet_hard_requirements": unmet,
         "notes": language_notes(profile["language"], report_language)
         + (
@@ -387,6 +525,13 @@ def render_markdown(results: list[dict[str, Any]], profile: dict[str, Any], repo
             lines.append(f"- {check}")
         if result["soft_fit_hits"]:
             lines.append(f"- {text['soft_fit_signals']}: " + ", ".join(result["soft_fit_hits"]))
+        if result.get("writing_evidence"):
+            if report_language == "zh":
+                lines.append("- 文书可用证据: " + "; ".join(item.get("theme", "") for item in result["writing_evidence"]))
+            else:
+                lines.append("- Drafting evidence: " + "; ".join(item.get("theme", "") for item in result["writing_evidence"]))
+        if result.get("writing_strategy"):
+            lines.append(f"- Writing strategy: {result['writing_strategy']}")
         if result["unmet_hard_requirements"]:
             lines.append(f"- {text['shortfalls']}: " + "; ".join(result["unmet_hard_requirements"]))
         lines.append("")
@@ -412,7 +557,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    profile = parse_profile(read_profile(Path(args.profile)), args.profile_language)
+    profile = load_profile(Path(args.profile), args.profile_language)
     report_language = resolve_report_language(args.report_language, profile["language"])
     results = [analyze(program, profile, report_language) for program in load_programs(Path(args.requirements_json))]
     metadata = {
