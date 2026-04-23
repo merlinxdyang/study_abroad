@@ -1,6 +1,6 @@
 # Cover Letter Template
 
-Use this as a drafting scaffold. Replace every bracketed item with verified applicant or program evidence.
+Use this as a drafting scaffold. Replace every bracketed item with verified applicant or program evidence. If the source CV/resume is not in the letter language, translate facts into natural application prose while preserving original names and marking uncertain translations as `needs_verification`.
 
 Dear Admissions Committee,
 

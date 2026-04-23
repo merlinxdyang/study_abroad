@@ -16,6 +16,8 @@
 - 不确定信息标记为 `not_found` 或 `needs_verification`。
 - 所有 deadline 必须保留原始日期，并标注时区；来源没有时区时明确说明。
 - 硬性条件和软性背景分开分析，不用软性亮点掩盖硬性不达标。
+- 简历语言和最终交付语言分开处理。用户上传的 CV/Resume 可能是中文或其他语言，需要先从原文提取事实，再按申请材料目标语言翻译和改写。
+- 对学校名、课程名、奖项名、项目名、职位名等没有官方译名的信息，不臆造译名，标记为 `needs_verification`。
 
 ## 仓库结构
 
@@ -73,6 +75,8 @@ python3 study-abroad-application-manager/scripts/extract_requirements.py parsed_
 
 ```bash
 python3 study-abroad-application-manager/scripts/match_analyzer.py requirements.json applicant_cv.pdf \
+  --profile-language auto \
+  --report-language auto \
   --out-md match_report.md \
   --out-json match_report.json
 ```
@@ -96,4 +100,4 @@ python3 study-abroad-application-manager/scripts/generate_checklist.py requireme
 
 ## 注意事项
 
-PDF 如果是扫描版，脚本可能无法直接提取文字，需要先 OCR 或提供文字版简章。最终提交申请前，必须人工复核官方页面中的 deadline、材料清单、费用和文书题目。
+PDF 如果是扫描版，脚本可能无法直接提取文字，需要先 OCR 或提供文字版简章。`match_analyzer.py` 会自动识别常见简历语言，并支持中文字段如“绩点”“托福”“雅思”的初步解析；非英文简历的软性匹配和翻译后的申请表述仍需要人工复核。最终提交申请前，必须人工复核官方页面中的 deadline、材料清单、费用和文书题目。

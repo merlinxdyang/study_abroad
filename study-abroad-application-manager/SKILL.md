@@ -13,6 +13,8 @@ Use this skill to turn admissions brochures, program pages, and applicant materi
 - Never invent professor names, courses, requirements, fees, or deadlines. If live program details may have changed, verify against official sources before finalizing.
 - Preserve original deadline dates and state the timezone. If the timezone is absent, write `timezone: not specified by source` and ask or infer only with a clear note.
 - Separate hard requirements from soft fit signals. Do not let strong soft fit hide an unmet hard requirement.
+- Treat the applicant material language separately from the final deliverable language. CVs/resumes may be Chinese or another language; extract evidence from the original text, preserve original names/titles, and translate/adapt evidence only for the target application document.
+- If a CV/resume is not in the target application language, mark uncertain translations of school names, course names, awards, projects, and role titles as `needs_verification` instead of inventing polished wording.
 - For Chinese users, write the analysis in Chinese unless they ask otherwise; keep document titles and official requirement names in their original language.
 - Deliver artifacts in a workspace folder named for the applicant or program batch when files are requested.
 
@@ -64,6 +66,8 @@ Use the Markdown table for human review. If a field is uncertain, keep the scrip
 
 ```bash
 python3 scripts/match_analyzer.py requirements.json applicant_cv.pdf \
+  --profile-language auto \
+  --report-language auto \
   --out-md match_report.md \
   --out-json match_report.json
 ```
@@ -74,7 +78,7 @@ Scoring formula:
 match_score = hard_requirement_pass_rate * 60 + soft_fit_score * 40
 ```
 
-Use script output as a first pass. Manually inspect any borderline program, unusual grading scale, or requirement that depends on interpretation.
+Use script output as a first pass. The analyzer detects common profile languages, supports common Chinese labels such as `绩点`, `托福`, and `雅思`, and adds language-handling notes to the report. Manually inspect any non-English profile, borderline program, unusual grading scale, or requirement that depends on interpretation.
 
 ### Generate Deadline Tracker
 
@@ -91,6 +95,7 @@ Use official deadline timezone when available. If a deadline has only a date, cr
 
 - Use `templates/cover_letter_template.md` as structure, not as final wording.
 - Read `references/academic_writing_guide.md` before drafting polished English letters.
+- If the resume/CV is Chinese or another non-English language, translate the applicant's evidence into natural application English only after preserving the original facts. Keep official names in their original language unless an official English translation is known.
 - Personalize each letter with verified program features, courses, faculty, labs, or research directions.
 - Avoid generic claims such as "world-class program" unless supported by a specific reason.
 - If the user requests `.docx`, draft in Markdown first, then convert with an available document tool or Python `python-docx`; keep the Markdown source beside the generated document.
@@ -111,5 +116,6 @@ Before final response:
 
 - Confirm all deadlines include source text or are marked for verification.
 - Confirm unmet hard requirements are visible in the match report.
+- Confirm the resume/CV language was handled explicitly, and any uncertain translated applicant evidence is marked `needs_verification`.
 - Confirm letters do not contain placeholders such as `[Program]`, `[Professor]`, or unsupported claims.
 - Confirm generated `.ics` files contain one event per checklist task plus the final deadline.
